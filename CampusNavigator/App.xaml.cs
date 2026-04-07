@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using CampusNavigator.Services;
 
 namespace CampusNavigator
 {
@@ -7,11 +7,22 @@ namespace CampusNavigator
         public App()
         {
             InitializeComponent();
+            MainPage = new AppShell();
         }
 
-        protected override Window CreateWindow(IActivationState? activationState)
+        protected override async void OnStart()
         {
-            return new Window(new AppShell());
+            base.OnStart();
+
+            // Daca nu exista profil salvat, trimitem la SetupPage
+            if (!ProfileService.IsSetupDone())
+            {
+                await Shell.Current.GoToAsync("//SetupPage");
+            }
+            else
+            {
+                await Shell.Current.GoToAsync("//OrarPage");
+            }
         }
     }
 }

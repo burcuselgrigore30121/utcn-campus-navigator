@@ -1,0 +1,429 @@
+@namespace CampusNavigator.ComponentsPages
+@page "/setup"
+@using CampusNavigator.Models
+@using CampusNavigator.Services
+@inject NavigationManager Nav
+
+<div class="setup-bg">
+    <div class="setup-card">
+
+        <!-- Logo -->
+        <div class="setup-logo">
+            <div class="logo-icon">🎓</div>
+            <div class="logo-text">Campus<span>Navigator</span></div>
+            <div class="logo-sub">UTCN · Configurare profil</div>
+        </div>
+
+        <!-- Step indicator -->
+        <div class="steps">
+            @for (int i = 1; i <= 4; i++)
+            {
+                var si = i;
+                <div class="step @(step == si ? "active" : step > si ? "done" : "")">
+                    @(step > si ? "✓" : si.ToString())
+                </div>
+                @if (i < 4) { <div class="step-line @(step > si ? "done" : "")"></div> }
+            }
+        </div>
+
+        <!-- STEP 1: Specializare -->
+        @if (step == 1)
+        {
+            <div class="step-content">
+                <div class="step-title">Specializarea ta</div>
+                <div class="step-sub">Alege facultatea și specializarea</div>
+                <div class="option-grid">
+                    @foreach (var s in new[] { "Calculatoare", "Automatica" })
+                    {
+                        <button class="option-btn @(specializare == s ? "selected" : "")"
+                                @onclick="() => specializare = s">
+                            <span class="opt-icon">@(s == "Calculatoare" ? "💻" : "⚙️")</span>
+                            <span>@s</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- STEP 2: An si Limba -->
+        @if (step == 2)
+        {
+            <div class="step-content">
+                <div class="step-title">Anul și limba</div>
+                <div class="step-sub">Selectează anul de studiu</div>
+                <div class="option-grid-4">
+                    @foreach (var a in new[] { 1, 2, 3, 4 })
+                    {
+                        <button class="option-btn @(an == a ? "selected" : "")"
+                                @onclick="() => an = a">
+                            <span class="opt-icon">@(new[]{"🌱","📚","🔬","🏆"}[a-1])</span>
+                            <span>An @a</span>
+                        </button>
+                    }
+                </div>
+                <div class="step-sub" style="margin-top:20px">Limba de predare</div>
+                <div class="option-grid">
+                    @foreach (var (l, icon, label) in new[] { ("romana","🇷🇴","Română"), ("engleza","🇬🇧","Engleză") })
+                    {
+                        <button class="option-btn @(limba == l ? "selected" : "")"
+                                @onclick="() => limba = l">
+                            <span class="opt-icon">@icon</span>
+                            <span>@label</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- STEP 3: Grupa -->
+        @if (step == 3)
+        {
+            <div class="step-content">
+                <div class="step-title">Grupa ta</div>
+                <div class="step-sub">Selectează numărul grupei</div>
+                <div class="option-grid-3">
+                    @foreach (var g in GetGrupeForProfile())
+                    {
+                        <button class="option-btn @(grupa == g ? "selected" : "")"
+                                @onclick="() => grupa = g">
+                            <span class="opt-icon">👥</span>
+                            <span>@g</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- STEP 4: Semigrupa -->
+        @if (step == 4)
+        {
+            <div class="step-content">
+                <div class="step-title">Semigrupa</div>
+                <div class="step-sub">Alege semigrupa pentru laboratoare</div>
+                <div class="option-grid">
+                    @foreach (var sg in new[] { 1, 2 })
+                    {
+                        <button class="option-btn @(semigrupa == sg ? "selected" : "")"
+                                @onclick="() => semigrupa = sg">
+                            <span class="opt-icon">@(sg == 1 ? "1️⃣" : "2️⃣")</span>
+                            <span>Semigrupa @sg</span>
+                        </button>
+                    }
+                </div>
+
+                <!-- Preview profil -->
+                <div class="profile-preview">
+                    <div class="pp-row"><span class="pp-label">Specializare</span><span class="pp-val">@specializare</span></div>
+                    <div class="pp-row"><span class="pp-label">An / Limbă</span><span class="pp-val">An @an · @(limba == "romana" ? "Română" : "Engleză")</span></div>
+                    <div class="pp-row"><span class="pp-label">Grupă</span><span class="pp-val">@grupa</span></div>
+                    <div class="pp-row"><span class="pp-label">Semigrupa</span><span class="pp-val">@semigrupa</span></div>
+                </div>
+            </div>
+        }
+
+        <!-- Eroare -->
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <div class="setup-error">⚠️ @error</div>
+        }
+
+        <!-- Butoane navigare -->
+        <div class="setup-nav">
+            @if (step > 1)
+            {
+                <button class="btn-back" @onclick="() => { step--; error = \"\"; }">← Înapoi</button>
+            }
+            else
+            {
+                <div></div>
+            }
+
+            @if (step < 4)
+            {
+                <button class="btn-next" @onclick="NextStep">Continuă →</button>
+            }
+            else
+            {
+                <button class="btn-save" @onclick="Save">✓ Salvează și începe</button>
+            }
+        </div>
+
+    </div>
+</div>
+
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    .setup-bg {
+        min-height: 100vh;
+        background: linear-gradient(160deg, #0D0D1A 0%, #12102A 60%, #0A0A14 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .setup-card {
+        width: 100%;
+        max-width: 400px;
+        background: rgba(255,255,255,0.04);
+        border: 1.5px solid rgba(255,255,255,0.08);
+        border-radius: 28px;
+        padding: 32px 24px;
+        backdrop-filter: blur(20px);
+    }
+
+    .setup-logo {
+        text-align: center;
+        margin-bottom: 28px;
+    }
+
+    .logo-icon { font-size: 48px; margin-bottom: 8px; }
+
+    .logo-text {
+        font-size: 24px;
+        font-weight: 900;
+        color: #fff;
+    }
+
+    .logo-text span { color: #A78BFA; }
+
+    .logo-sub {
+        font-size: 11px;
+        color: rgba(255,255,255,0.4);
+        margin-top: 4px;
+        letter-spacing: 1px;
+    }
+
+    .steps {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        margin-bottom: 28px;
+    }
+
+    .step {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.2);
+        color: rgba(255,255,255,0.3);
+        font-size: 12px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        flex-shrink: 0;
+    }
+
+    .step.active {
+        border-color: #A78BFA;
+        background: rgba(167,139,250,0.2);
+        color: #A78BFA;
+    }
+
+    .step.done {
+        border-color: #A78BFA;
+        background: #A78BFA;
+        color: #fff;
+    }
+
+    .step-line {
+        width: 32px;
+        height: 2px;
+        background: rgba(255,255,255,0.1);
+        transition: background 0.3s ease;
+    }
+
+    .step-line.done { background: #A78BFA; }
+
+    .step-content { margin-bottom: 24px; }
+
+    .step-title {
+        font-size: 20px;
+        font-weight: 900;
+        color: #fff;
+        margin-bottom: 6px;
+    }
+
+    .step-sub {
+        font-size: 12px;
+        color: rgba(255,255,255,0.5);
+        margin-bottom: 16px;
+    }
+
+    .option-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .option-grid-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+    }
+
+    .option-grid-4 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 4px;
+    }
+
+    .option-btn {
+        background: rgba(255,255,255,0.05);
+        border: 1.5px solid rgba(255,255,255,0.1);
+        border-radius: 16px;
+        padding: 14px 8px;
+        color: rgba(255,255,255,0.7);
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        transition: all 0.2s ease;
+        font-family: inherit;
+    }
+
+    .option-btn:active { transform: scale(0.96); }
+
+    .option-btn.selected {
+        background: rgba(167,139,250,0.2);
+        border-color: #A78BFA;
+        color: #A78BFA;
+    }
+
+    .opt-icon { font-size: 22px; }
+
+    .profile-preview {
+        background: rgba(167,139,250,0.08);
+        border: 1px solid rgba(167,139,250,0.2);
+        border-radius: 16px;
+        padding: 14px 16px;
+        margin-top: 20px;
+    }
+
+    .pp-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+        font-size: 12px;
+    }
+
+    .pp-label { color: rgba(255,255,255,0.4); }
+    .pp-val { color: #A78BFA; font-weight: 700; }
+
+    .setup-error {
+        background: rgba(255,107,107,0.15);
+        border: 1px solid rgba(255,107,107,0.3);
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-size: 12px;
+        color: #FF6B6B;
+        margin-bottom: 16px;
+    }
+
+    .setup-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .btn-back {
+        background: transparent;
+        border: 1.5px solid rgba(255,255,255,0.15);
+        border-radius: 14px;
+        padding: 12px 20px;
+        color: rgba(255,255,255,0.5);
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s ease;
+    }
+
+    .btn-next, .btn-save {
+        flex: 1;
+        background: linear-gradient(135deg, #7C6FFF, #A78BFA);
+        border: none;
+        border-radius: 14px;
+        padding: 14px 20px;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 800;
+        cursor: pointer;
+        font-family: inherit;
+        box-shadow: 0 4px 16px rgba(124,111,255,0.4);
+        transition: all 0.2s ease;
+    }
+
+    .btn-save {
+        background: linear-gradient(135deg, #60D394, #4CC9F0);
+        box-shadow: 0 4px 16px rgba(96,211,148,0.4);
+    }
+</style>
+
+@code {
+    private int step = 1;
+    private string specializare = "";
+    private int an = 0;
+    private string limba = "";
+    private int grupa = 0;
+    private int semigrupa = 0;
+    private string error = "";
+
+    private List<int> GetGrupeForProfile()
+    {
+        // grupe pentru Automatica An 3 romana: 30131, 30132, 30133, 30134
+        // generare simpla bazata pe specializare + an
+        if (specializare == "Automatica" && an == 3)
+            return new List<int> { 30131, 30132, 30133, 30134, 30135 };
+        if (specializare == "Automatica" && an == 2)
+            return new List<int> { 30121, 30122, 30123, 30124 };
+        if (specializare == "Automatica" && an == 1)
+            return new List<int> { 30111, 30112, 30113, 30114 };
+        if (specializare == "Calculatoare" && an == 3)
+            return new List<int> { 30231, 30232, 30233, 30234, 30235 };
+        if (specializare == "Calculatoare" && an == 2)
+            return new List<int> { 30221, 30222, 30223, 30224 };
+        if (specializare == "Calculatoare" && an == 1)
+            return new List<int> { 30211, 30212, 30213, 30214 };
+        // fallback
+        return new List<int> { 30131, 30132, 30133, 30134 };
+    }
+
+    private void NextStep()
+    {
+        error = "";
+        if (step == 1 && string.IsNullOrEmpty(specializare))
+        { error = "Selectează specializarea!"; return; }
+        if (step == 2 && (an == 0 || string.IsNullOrEmpty(limba)))
+        { error = "Selectează anul și limba!"; return; }
+        if (step == 3 && grupa == 0)
+        { error = "Selectează grupa!"; return; }
+        step++;
+    }
+
+    private void Save()
+    {
+        if (semigrupa == 0) { error = "Selectează semigrupa!"; return; }
+
+        ProfileService.Save(new UserProfile
+        {
+            Specializare = specializare,
+            An = an,
+            Limba = limba,
+            Grupa = grupa,
+            Semigrupa = semigrupa
+        });
+
+        Nav.NavigateTo("/");
+    }
+}

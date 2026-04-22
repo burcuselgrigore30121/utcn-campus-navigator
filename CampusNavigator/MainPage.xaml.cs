@@ -1,24 +1,28 @@
-﻿namespace CampusNavigator
+﻿using Microsoft.AspNetCore.Components.WebView.Maui;
+
+namespace CampusNavigator
 {
     public partial class MainPage : ContentPage
     {
-        int count = 0;
-
         public MainPage()
         {
             InitializeComponent();
-        }
 
-        private void OnCounterClicked(object? sender, EventArgs e)
-        {
-            count++;
+            var blazorWebView = new BlazorWebView
+            {
+                HostPage = "wwwroot/index.html"
+            };
 
-            if (count == 1)
-                CounterBtn.Text = $"Clicked {count} time";
-            else
-                CounterBtn.Text = $"Clicked {count} times";
+            var routesType = typeof(App).Assembly
+                .GetType("CampusNavigator.Components.Routes");
 
-            SemanticScreenReader.Announce(CounterBtn.Text);
+            blazorWebView.RootComponents.Add(new RootComponent
+            {
+                Selector = "#app",
+                ComponentType = routesType!
+            });
+
+            Content = blazorWebView;
         }
     }
 }

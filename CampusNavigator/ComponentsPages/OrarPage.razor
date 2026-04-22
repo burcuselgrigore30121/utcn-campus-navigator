@@ -1,0 +1,494 @@
+@namespace CampusNavigator.ComponentsPages
+@page "/"
+@page "/orar"
+@using CampusNavigator.Models
+@using CampusNavigator.Services
+@inject ScheduleService ScheduleSvc
+@inject AnnouncementService AnnSvc
+@inject ThemeService Theme
+@implements IDisposable
+
+@code {
+    private UserProfile? profile;
+    private List<ScheduleEntry> entries = new();
+    private List<AnnouncementEntry> announcements = new();
+    private bool loadingAnn = false;
+    private string annStatus = "";
+    private bool isSaptamanaImpara = UserProfile.IsCurrentWeekOdd();
+    private string selectedZi = "Luni";
+    private string todayZi = "Luni";
+    private string activeTab = "orar";
+    private int activeNav = 0;
+    private string greeting = "";
+    private bool visible = false;
+    private System.Timers.Timer? clockTimer;
+    private System.Timers.Timer? visibleTimer;
+
+    private readonly string[] zileDisplay = { "Lun", "Mar", "Mie", "Joi", "Vin" };
+    private readonly string[] zileKey = { "Luni", "Marti", "Miercuri", "Joi", "Vineri" };
+
+    private readonly Dictionary<string, (string color, string emoji)> subjects = new()
+    {
+        {"IRA",("#FF6B6B","🔬")},{"II",("#7C6FFF","💻")},{"TD",("#FFB347","📡")},
+        {"STR",("#4ECDC4","⚡")},{"EAHP",("#A78BFA","🔧")},{"EAEE",("#FF85A1","⚙️")},
+        {"GAC",("#60D394","🎨")},{"AM",("#FFD93D","📐")},{"PLA",("#4CC9F0","🖥️")},
+        {"PSN",("#F72585","🔌")},{"SDA",("#7209B7","🗃️")},{"ET",("#06D6A0","⚡")},
+        {"IA",("#118AB2","🤖")},{"AAI",("#EF476F","🏭")},{"MS",("#FFD166","📊")},
+    };
+
+    private readonly string[] fallbackColors = {"#FF6B6B","#4ECDC4","#A78BFA","#FFB347","#60D394","#4CC9F0"};
+    private readonly string[] fallbackEmoji  = {"📚","🎯","🔬","💡","📖","⚡"};
+
+    private string newTaskText = "";
+
+    private List<TaskItem> tasks = new()
+    {
+        new(){Id=1,Text="Referat IRA",Subject="IRA",Priority="Urgent",Deadline="2026-04-10"},
+        new(){Id=2,Text="Pregătit lab STR",Subject="STR",Priority="Normal",Deadline="2026-04-12"},
+        new(){Id=3,Text="Citit curs TD cap. 4",Subject="TD",Priority="Opțional",Deadline="2026-04-15",Done=true},
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        profile = ProfileService.Load();
+        todayZi = selectedZi = DateTime.Today.DayOfWeek switch
+        {
+            DayOfWeek.Monday    => "Luni",
+            DayOfWeek.Tuesday   => "Marti",
+            DayOfWeek.Wednesday => "Miercuri",
+            DayOfWeek.Thursday  => "Joi",
+            DayOfWeek.Friday    => "Vineri",
+            _ => "Luni"
+        };
+        UpdateGreeting();
+        Theme.ThemeChanged += OnThemeChanged;
+        await LoadDay();
+
+        clockTimer = new System.Timers.Timer(60000);
+        clockTimer.Elapsed += (s, e) => InvokeAsync(() => { UpdateGreeting(); StateHasChanged(); });
+        clockTimer.Start();
+
+        // fade-in la pornire
+        visibleTimer = new System.Timers.Timer(80);
+        visibleTimer.Elapsed += (s, e) => InvokeAsync(() => { visible = true; visibleTimer?.Stop(); visibleTimer?.Dispose(); StateHasChanged(); });
+        visibleTimer.Start();
+    }
+
+    private void OnThemeChanged(object? s, bool v) => InvokeAsync(StateHasChanged);
+
+    private void UpdateGreeting()
+    {
+        int h = DateTime.Now.Hour;
+        greeting = h >= 5 && h < 12 ? "Bună dimineața 🌤️"
+                 : h >= 12 && h < 18 ? "Bună ziua ☀️"
+                 : "Bună seara 🌙";
+    }
+
+    private async Task LoadDay()
+    {
+        if (profile == null) return;
+        entries = await ScheduleSvc.GetForDayAsync(profile, selectedZi, isSaptamanaImpara);
+    }
+
+    private async Task SelectDay(string zi) { selectedZi = zi; await LoadDay(); StateHasChanged(); }
+
+    private async Task ToggleWeek(bool impara)
+    {
+        if (isSaptamanaImpara == impara) return;
+        isSaptamanaImpara = impara; await LoadDay(); StateHasChanged();
+    }
+
+    private async Task SwitchTab(string tab)
+    {
+        activeTab = tab;
+        if (tab == "anunturi" && !announcements.Any()) await LoadAnnouncements();
+        StateHasChanged();
+    }
+
+    private async Task LoadAnnouncements(bool force = false)
+    {
+        loadingAnn = true; annStatus = "📡 Se încarcă de pe ac.utcluj.ro..."; StateHasChanged();
+        announcements = await AnnSvc.GetAnnouncementsAsync(force);
+        annStatus = announcements.Count > 0 ? $"✅ {announcements.Count} anunțuri" : "⚠️ Verifică conexiunea";
+        loadingAnn = false; StateHasChanged();
+    }
+
+    private void GoHome() { selectedZi = todayZi; activeTab = "orar"; activeNav = 0; _ = LoadDay(); StateHasChanged(); }
+
+    private void ToggleTask(int id)
+    {
+        var t = tasks.FirstOrDefault(x => x.Id == id);
+        if (t != null) { t.Done = !t.Done; StateHasChanged(); }
+    }
+
+    private void AddTask()
+    {
+        if (string.IsNullOrWhiteSpace(newTaskText)) return;
+        tasks.Add(new TaskItem { Id = DateTime.Now.Millisecond, Text = newTaskText.Trim(), Subject = "IRA", Priority = "Normal" });
+        newTaskText = "";
+        StateHasChanged();
+    }
+
+    private async Task OpenMaps(string url) { try { await Launcher.OpenAsync(new Uri(url)); } catch { } }
+    private async Task OpenAnnouncement(string url) { try { await Launcher.OpenAsync(new Uri(url)); } catch { } }
+    private async Task ShowChat() => await Application.Current!.MainPage!.DisplayAlert("Chat", "Chatbot-ul vine în curând! 🤖", "OK");
+
+    private (string color, string emoji) GetSubject(string materie)
+    {
+        if (string.IsNullOrEmpty(materie)) return ("#A78BFA", "📌");
+        foreach (var (k, v) in subjects)
+            if (materie.Contains(k, StringComparison.OrdinalIgnoreCase)) return v;
+        int h = Math.Abs(materie.GetHashCode()) % fallbackColors.Length;
+        return (fallbackColors[h], fallbackEmoji[h % fallbackEmoji.Length]);
+    }
+
+    private string MonthShort(string mm) => mm switch
+    {
+        "01"=>"Ian","02"=>"Feb","03"=>"Mar","04"=>"Apr","05"=>"Mai","06"=>"Iun",
+        "07"=>"Iul","08"=>"Aug","09"=>"Sep","10"=>"Oct","11"=>"Nov","12"=>"Dec",_=>mm
+    };
+
+    private int DonePct()
+    {
+        if (!entries.Any()) return 0;
+        int done = entries.Count(e => { var p=e.Slot.Split('-'); return p.Length==2 && int.TryParse(p[1],out int eh) && DateTime.Now.Hour>=eh; });
+        return (int)Math.Round(done * 100.0 / entries.Count);
+    }
+
+    private double RingOffset(double pct, double r) => 2 * Math.PI * r * (1 - pct);
+
+    private bool IsToday => selectedZi == todayZi;
+
+    private ScheduleEntry? ActiveEntry => !IsToday ? null : entries.FirstOrDefault(e =>
+    {
+        var p=e.Slot.Split('-');
+        return p.Length==2 && int.TryParse(p[0],out int sh) && int.TryParse(p[1],out int eh)
+            && DateTime.Now.Hour>=sh && DateTime.Now.Hour<eh;
+    });
+
+    private ScheduleEntry? NextEntry => !IsToday ? null : entries.FirstOrDefault(e =>
+    {
+        var p=e.Slot.Split('-');
+        return p.Length==2 && int.TryParse(p[0],out int sh) && sh>DateTime.Now.Hour;
+    });
+
+    private bool IsActive(ScheduleEntry e)
+    {
+        if (!IsToday) return false;
+        var p=e.Slot.Split('-');
+        return p.Length==2 && int.TryParse(p[0],out int sh) && int.TryParse(p[1],out int eh)
+            && DateTime.Now.Hour>=sh && DateTime.Now.Hour<eh;
+    }
+
+    private bool IsDone(ScheduleEntry e)
+    {
+        if (!IsToday) return false;
+        var p=e.Slot.Split('-');
+        return p.Length==2 && int.TryParse(p[1],out int eh) && DateTime.Now.Hour>=eh;
+    }
+
+    private int GetElapsed(ScheduleEntry e)
+    {
+        var p=e.Slot.Split('-');
+        if (p.Length!=2||!int.TryParse(p[0],out int sh)) return 0;
+        return Math.Clamp((DateTime.Now.Hour-sh)*60+DateTime.Now.Minute,0,120);
+    }
+
+    private int GetRemaining(ScheduleEntry e) => Math.Max(0,120-GetElapsed(e));
+
+    private int GetMinsUntil(ScheduleEntry e)
+    {
+        var p=e.Slot.Split('-');
+        if (p.Length!=2||!int.TryParse(p[0],out int sh)) return 0;
+        return Math.Max(0,sh*60-(DateTime.Now.Hour*60+DateTime.Now.Minute));
+    }
+
+    public void Dispose()
+    {
+        clockTimer?.Stop(); clockTimer?.Dispose();
+        visibleTimer?.Stop(); visibleTimer?.Dispose();
+        Theme.ThemeChanged -= OnThemeChanged;
+    }
+}
+
+<div class="@(Theme.IsDark ? "dark" : "light")" style="height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);transition:background 0.5s ease;max-width:430px;margin:0 auto;position:relative;">
+
+    <!-- Blobs decorative -->
+    <div class="blob blob1"></div>
+    <div class="blob blob2"></div>
+
+    <!-- HEADER -->
+    <div class="header" style="opacity:@(visible?"1":"0");transform:@(visible?"translateY(0)":"translateY(-14px)");transition:all 0.4s ease;">
+        <div class="header-row">
+            <div class="header-left">
+                <div class="salut">@greeting</div>
+                <div class="title">Campus<span>Navigator</span></div>
+            </div>
+            <div class="header-right">
+                <button class="theme-badge" @onclick="() => Theme.IsDark = !Theme.IsDark">
+                    <span style="font-size:16px">@(Theme.IsDark ? "☀️" : "🌙")</span>
+                    <span>@(Theme.IsDark ? "Light" : "Dark")</span>
+                </button>
+                @if (profile != null)
+                {
+                    <div class="grupa-badge">
+                        <div class="info">
+                            <div class="gr">Gr. @profile.Grupa</div>
+                            <div class="sub2">An @profile.An · Sg. @profile.Semigrupa</div>
+                        </div>
+                        <div class="ring-wrap" style="width:36px;height:36px;">
+                            <svg width="36" height="36">
+                                <circle cx="18" cy="18" r="14" fill="none" stroke="var(--ring-track)" stroke-width="3.5"/>
+                                <circle cx="18" cy="18" r="14" fill="none" stroke="var(--accent)" stroke-width="3.5"
+                                        stroke-dasharray="@(2 * Math.PI * 14)"
+                                        stroke-dashoffset="@RingOffset(DonePct() / 100.0, 14).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
+                                        stroke-linecap="round"
+                                        style="transition:stroke-dashoffset 0.6s ease"/>
+                            </svg>
+                            <div class="ring-label">@DonePct()%</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB PILLS -->
+    <div class="tab-pills" style="opacity:@(visible?"1":"0");transition:opacity 0.4s ease 0.2s;">
+        @foreach (var (id, label) in new[]{("orar","Orar"),("tasks","Tasks"),("anunturi","Anunțuri")})
+        {
+            <button class="tab-pill @(activeTab==id?"active":"inactive")"
+                    @onclick="() => SwitchTab(id)">@label</button>
+        }
+    </div>
+
+    <!-- SCROLL -->
+    <div class="scroll">
+
+        <!-- BANNER -->
+        @{
+            var ae = ActiveEntry;
+            var ne = NextEntry;
+            var banner = ae ?? ne ?? entries.FirstOrDefault();
+        }
+        @if (banner != null)
+        {
+            var (bc, be) = GetSubject(banner.Materie);
+            var isAct = ae != null;
+            <div class="banner" style="background:linear-gradient(135deg,@bc,@(bc)AA);box-shadow:0 12px 32px @(bc)44;">
+                @if (isAct)
+                {
+                    <div class="shimmer-top" style="background:linear-gradient(90deg,transparent,rgba(255,255,255,0.6),transparent)"></div>
+                }
+                <div class="circle1"></div>
+                <div class="circle2"></div>
+                <div class="status">@(isAct ? "● ÎN DESFĂȘURARE" : "⏰ URMEAZĂ")</div>
+                @if (isAct)
+                {
+                    <div class="subject">@banner.Materie</div>
+                    <div class="details">@be @(banner.Tip ?? "Activitate") · Sala @(banner.Sala ?? "—")</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width:@(GetElapsed(banner)*100/120)%"></div>
+                    </div>
+                    <div class="time-row">
+                        <span>@GetElapsed(banner) min scurse</span>
+                        <span>@GetRemaining(banner) min rămase</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="countdown">
+                        <div class="next-info">
+                            <div class="nsubj">@banner.Materie</div>
+                            <div class="ndetail">@be @(banner.Tip ?? "Activitate") · Sala @(banner.Sala ?? "—")</div>
+                        </div>
+                        <div class="mins">
+                            <div class="num">@GetMinsUntil(banner)</div>
+                            <div class="lbl">MIN</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- ORAR TAB -->
+        @if (activeTab == "orar")
+        {
+            <div class="day-tabs">
+                @for (int i = 0; i < zileDisplay.Length; i++)
+                {
+                    var zi = zileKey[i]; var disp = zileDisplay[i];
+                    var isActDay = zi == selectedZi;
+                    var isTod = zi == todayZi && !isActDay;
+                    <button class="day-tab @(isActDay?"active":isTod?"today-inactive":"inactive")"
+                            @onclick="() => SelectDay(zi)">@disp</button>
+                }
+            </div>
+
+            <div class="week-toggle">
+                <button class="week-btn @(isSaptamanaImpara?"active":"inactive")"
+                        @onclick="() => ToggleWeek(true)">Săpt. Impară</button>
+                <button class="week-btn @(!isSaptamanaImpara?"active":"inactive")"
+                        @onclick="() => ToggleWeek(false)">Săpt. Pară</button>
+            </div>
+
+            @if (!entries.Any())
+            {
+                <div class="empty">
+                    <div class="emoji">😴</div>
+                    <div class="txt">Nicio activitate azi</div>
+                </div>
+            }
+            else
+            {
+                @for (int i = 0; i < entries.Count; i++)
+                {
+                    var entry = entries[i];
+                    var (ec, ee) = GetSubject(entry.Materie);
+                    var isActCard = IsActive(entry);
+                    var isDoneCard = IsDone(entry);
+                    var cardPct = isDoneCard ? 1.0 : isActCard ? 0.55 : 0.0;
+                    var delay = i * 75;
+                    <div class="card anim @(isActCard?"active-card":"") @(isDoneCard?"done-card":"")"
+                         style="animation-delay:@(delay)ms;
+                                @(isActCard ? $"background:linear-gradient(135deg,{ec}18,{ec}08);border:1.5px solid {ec}55;box-shadow:0 8px 28px {ec}22;" : "")">
+                        @if (isActCard)
+                        {
+                            <div class="shimmer-line" style="background:linear-gradient(90deg,transparent,@ec,transparent)"></div>
+                        }
+                        <!-- Progress ring -->
+                        <div class="card-ring">
+                            <svg width="52" height="52">
+                                <circle cx="26" cy="26" r="22" fill="none" stroke="var(--ring-track)" stroke-width="4"/>
+                                <circle cx="26" cy="26" r="22" fill="none" stroke="@ec" stroke-width="4"
+                                        stroke-dasharray="@(2 * Math.PI * 22)"
+                                        stroke-dashoffset="@RingOffset(cardPct, 22).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
+                                        stroke-linecap="round"
+                                        style="transition:stroke-dashoffset 0.6s ease"/>
+                            </svg>
+                            <div class="card-emoji" style="@(isDoneCard?"filter:grayscale(1)":"")">
+                                @(isDoneCard ? "✅" : ee)
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                                <div class="card-title @(isDoneCard?"done":"")">@entry.Materie</div>
+                                <span class="time-badge"
+                                      style="background:@(ec)18;color:@(isDoneCard?"var(--muted)":ec)">
+                                    @entry.Slot
+                                </span>
+                            </div>
+                            <div class="card-badges">
+                                <span class="type-badge @(isDoneCard?"done":"")">
+                                    @((entry.Tip ?? "—").ToUpper())
+                                </span>
+                                @if (!string.IsNullOrEmpty(entry.Sala))
+                                {
+                                    <span class="room-lbl">📍 @entry.Sala</span>
+                                }
+                                @if (isActCard)
+                                {
+                                    <span class="now-badge" style="color:@ec">● ACUM</span>
+                                }
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(entry.MapsUrl))
+                        {
+                            <button class="maps-btn" @onclick="() => OpenMaps(entry.MapsUrl!)">🗺</button>
+                        }
+                    </div>
+                }
+            }
+        }
+
+        <!-- TASKS TAB -->
+        @if (activeTab == "tasks")
+        {
+            <div style="display:flex;gap:8px;margin-bottom:14px;">
+                <input @bind="newTaskText" @bind:event="oninput"
+                       @onkeydown="async e => { if (e.Key == "Enter") AddTask(); }"
+                       placeholder="Adaugă task nou..."
+                       style="flex:1;background:var(--input);border:1.5px solid var(--input-border);border-radius:14px;padding:10px 14px;color:var(--input-text);font-size:13px;outline:none;font-family:inherit;" />
+                <button @onclick="AddTask"
+                        style="background:var(--accent-grad);border:none;border-radius:14px;padding:0 16px;color:#fff;font-weight:800;font-size:18px;cursor:pointer;box-shadow:0 4px 12px #7C6FFF44;">+</button>
+            </div>
+            @foreach (var task in tasks.OrderBy(t => t.Done).ThenBy(t => t.PriorityOrder))
+            {
+                var (sc, _) = GetSubject(task.Subject);
+                var pc = task.Priority switch { "Urgent"=>"#FF6B6B","Normal"=>"#FFB347",_=>"#4ECDC4" };
+                <div class="task-card @(task.Done?"done":"")"
+                     @onclick="() => ToggleTask(task.Id)"
+                     style="border:1.5px solid @(task.Done?"var(--card-border)":pc+"33")">
+                    <div class="task-check"
+                         style="border-color:@sc;background:@(task.Done?sc:"transparent")">
+                        @(task.Done ? "✓" : "")
+                    </div>
+                    <div class="task-info">
+                        <div class="task-title @(task.Done?"done":"")">@task.Text</div>
+                        <div class="task-badges">
+                            <span class="mini-badge" style="background:@(sc)20;color:@sc">@task.Subject</span>
+                            <span class="mini-badge" style="background:@(pc)20;color:@pc">@task.Priority</span>
+                            @if (!string.IsNullOrEmpty(task.Deadline))
+                            {
+                                <span class="date-lbl">📅 @task.Deadline</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+
+        <!-- ANUNTURI TAB -->
+        @if (activeTab == "anunturi")
+        {
+            <div class="ann-status">
+                <span>@annStatus</span>
+                <button class="refresh-btn" @onclick="() => LoadAnnouncements(true)">↻</button>
+            </div>
+            @if (loadingAnn)
+            {
+                <div class="loader"><span class="spin">⟳</span> Se încarcă...</div>
+            }
+            @for (int i = 0; i < announcements.Count; i++)
+            {
+                var ann = announcements[i];
+                var delay = i * 60;
+                var parts = ann.Date?.Split('-') ?? Array.Empty<string>();
+                <div class="ann-card" style="animation-delay:@(delay)ms"
+                     @onclick="() => OpenAnnouncement(ann.Url)">
+                    <div class="ann-date">
+                        @if (parts.Length == 3)
+                        {
+                            <div class="day">@parts[0]</div>
+                            <div class="mon">@MonthShort(parts[1]) @parts[2]</div>
+                        }
+                    </div>
+                    <div class="ann-info">
+                        <div class="ann-title">@ann.Title</div>
+                        <button class="read-btn">Citește →</button>
+                    </div>
+                </div>
+            }
+        }
+
+    </div><!-- end scroll -->
+
+    <!-- BOTTOM NAV -->
+    <div class="bottom-nav">
+        <button class="nav-item @(activeNav==0?"active-nav":"")" @onclick="GoHome">
+            <div class="nav-icon @(activeNav==0?"active-icon":"")">🏠</div>
+            <span class="nav-lbl @(activeNav==0?"active-lbl":"")">acasă</span>
+        </button>
+        <button class="nav-item @(activeNav==1?"active-nav":"")"
+                @onclick="async () => { activeNav=1; StateHasChanged(); await ShowChat(); }">
+            <div class="nav-icon @(activeNav==1?"active-icon":"")">🤖</div>
+            <span class="nav-lbl @(activeNav==1?"active-lbl":"")">chat</span>
+        </button>
+        <button class="nav-item @(activeNav==2?"active-nav":"")"
+                @onclick="() => { activeNav=2; StateHasChanged(); }">
+            <div class="nav-icon @(activeNav==2?"active-icon":"")">👤</div>
+            <span class="nav-lbl @(activeNav==2?"active-lbl":"")">profil</span>
+        </button>
+    </div>
+
+</div>

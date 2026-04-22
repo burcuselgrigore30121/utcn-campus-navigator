@@ -1,5 +1,4 @@
-﻿using CampusNavigator.Services;
-using CampusNavigator.Views;
+using CampusNavigator.Services;
 using Microsoft.Extensions.Logging;
 
 namespace CampusNavigator
@@ -17,14 +16,15 @@ namespace CampusNavigator
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
 
+            builder.Services.AddMauiBlazorWebView();
+
             // Servicii
             builder.Services.AddSingleton<ScheduleService>();
-
-            // Pagini
-            builder.Services.AddTransient<SetupPage>();
-            builder.Services.AddTransient<OrarPage>();
+            builder.Services.AddSingleton<ThemeService>();
+            builder.Services.AddSingleton<AnnouncementService>();
 
 #if DEBUG
+            builder.Services.AddBlazorWebViewDeveloperTools();
             builder.Logging.AddDebug();
 #endif
 

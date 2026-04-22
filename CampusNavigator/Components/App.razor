@@ -1,0 +1,14 @@
+@namespace CampusNavigator.Components
+@using CampusNavigator.Services
+@inject NavigationManager Nav
+
+@code {
+    protected override void OnInitialized()
+    {
+        // redirectam la setup daca profilul nu e configurat
+        if (!ProfileService.IsSetupDone())
+            Nav.NavigateTo("/setup");
+        else
+            Nav.NavigateTo("/");
+    }
+}

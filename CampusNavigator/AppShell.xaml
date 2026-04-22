@@ -3,18 +3,12 @@
     x:Class="CampusNavigator.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:views="clr-namespace:CampusNavigator.Views"
-    Shell.NavBarIsVisible="True">
+    xmlns:local="clr-namespace:CampusNavigator"
+    Shell.NavBarIsVisible="False"
+    Shell.TabBarIsVisible="False">
 
-    <FlyoutItem FlyoutDisplayOptions="AsMultipleItems">
-        <ShellContent
-            Title="Orar"
-            Route="OrarPage"
-            ContentTemplate="{DataTemplate views:OrarPage}" />
-        <ShellContent
-            Title="Profil"
-            Route="SetupPage"
-            ContentTemplate="{DataTemplate views:SetupPage}" />
-    </FlyoutItem>
+    <ShellContent
+        Route="MainPage"
+        ContentTemplate="{DataTemplate local:MainPage}" />
 
 </Shell>
